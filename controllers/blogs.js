@@ -11,21 +11,30 @@ blogsRouter.post(
   "/",
   middleware.userExtractor,
   async (request, response, next) => {
-    const body = request.body;
-    const user = request.user;
+    const { title, author, url, likes } = request.body;
     const blog = new Blog({
-      title: body.title,
-      author: body.author,
-      url: body.url,
-      likes: body.likes,
-      user: user._id,
+      title,
+      author,
+      url,
+      likes: likes ? likes : 0,
     });
 
-    const savedBlog = await blog.save();
-    user.blogs = user.blogs.concat(savedBlog._id);
+    const user = request.user;
+
+    if (!user) {
+      return response.status(401).json({ error: "operation not permitted" });
+    }
+
+    blog.user = user._id;
+
+    let createdBlog = await blog.save();
+
+    user.blogs = user.blogs.concat(createdBlog._id);
     await user.save();
 
-    response.status(201).json(savedBlog);
+    createdBlog = await Blog.findById(createdBlog._id).populate("user");
+
+    response.status(201).json(createdBlog);
   }
 );
 
@@ -53,11 +62,13 @@ blogsRouter.delete(
 blogsRouter.put("/:id", async (request, response) => {
   const { title, url, author, likes } = request.body;
 
-  const updatedBlog = await Blog.findByIdAndUpdate(
+  let updatedBlog = await Blog.findByIdAndUpdate(
     request.params.id,
     { title, url, author, likes },
     { new: true }
   );
+
+  updatedBlog = await Blog.findById(updatedBlog._id).populate("user");
 
   response.json(updatedBlog);
 });
